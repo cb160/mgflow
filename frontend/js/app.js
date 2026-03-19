@@ -81,11 +81,7 @@ function renderEmbed(embedJson) {
 }
 
 function buildCdnUrl(img) {
-  // Images from Bluesky are referenced by CID; we proxy via /api/img or just use CDN
-  // The thumb field is a CID string; construct the CDN URL
-  if (!img.thumb) return '';
-  if (img.thumb.startsWith('http')) return img.thumb;
-  return `https://cdn.bsky.app/img/feed_thumbnail/plain/${img.thumb}@jpeg`;
+  return img.thumb || img.fullsize || '';
 }
 
 // ── Card rendering ────────────────────────────────────────────────────────

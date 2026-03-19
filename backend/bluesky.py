@@ -36,22 +36,29 @@ def _parse_embed(embed: dict | None) -> dict | None:
     if "images" in t:
         images = []
         for img in embed.get("images", []):
+            # view format has thumb/fullsize as full URLs; record format has image.ref.$link
+            thumb = img.get("thumb") or img.get("image", {}).get("ref", {}).get("$link")
+            fullsize = img.get("fullsize") or thumb
             images.append({
                 "type": "image",
-                "thumb": img.get("image", {}).get("ref", {}).get("$link"),
-                "fullsize": img.get("image", {}).get("ref", {}).get("$link"),
+                "thumb": thumb,
+                "fullsize": fullsize,
                 "alt": img.get("alt", ""),
-                "mime": img.get("image", {}).get("mimeType"),
             })
         return {"type": "images", "images": images}
     if "external" in t:
         ext = embed.get("external", {})
+        raw_thumb = ext.get("thumb")
+        # view: thumb is a URL string; record: thumb is a blob dict
+        thumb = raw_thumb if isinstance(raw_thumb, str) else (
+            raw_thumb.get("ref", {}).get("$link") if isinstance(raw_thumb, dict) else None
+        )
         return {
             "type": "external",
             "uri": ext.get("uri"),
             "title": ext.get("title"),
             "description": ext.get("description"),
-            "thumb": ext.get("thumb", {}).get("ref", {}).get("$link") if isinstance(ext.get("thumb"), dict) else None,
+            "thumb": thumb,
         }
     if "record" in t and "embed" not in t:
         rec = embed.get("record", {})
