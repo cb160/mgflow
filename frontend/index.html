@@ -27,6 +27,22 @@
     <!-- ── Video panel ── -->
     <aside class="video-panel" id="videoPanel">
 
+      <!-- Stream selector -->
+      <div class="stream-selector">
+        <select id="streamSelect" class="stream-select"></select>
+        <button class="stream-icon-btn" id="streamAddBtn" title="Add stream">+</button>
+        <button class="stream-icon-btn" id="streamRemoveBtn" title="Remove stream">✕</button>
+      </div>
+
+      <div class="stream-add-form" id="streamAddForm">
+        <input id="streamNameInput" class="stream-input" type="text" placeholder="Stream name">
+        <input id="streamUrlInput" class="stream-input" type="text" placeholder="YouTube URL or video ID">
+        <div class="stream-form-btns">
+          <button class="clip-btn" id="streamSaveBtn" style="margin:0">Add stream</button>
+          <button class="stream-cancel-btn" id="streamCancelBtn">Cancel</button>
+        </div>
+      </div>
+
       <div class="video-wrapper">
         <div id="ytPlayer"></div>
       </div>

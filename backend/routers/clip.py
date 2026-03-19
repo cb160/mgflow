@@ -12,14 +12,14 @@ router = APIRouter(prefix="/api/clip", tags=["clip"])
 logger = logging.getLogger(__name__)
 
 BLOCKS_URL = os.environ.get("BLOCKS_URL", "http://blocks.apps.svc.cluster.local")
-YOUTUBE_VIDEO_ID = "jdI7MZfMEFc"
-THUMBNAIL_URL = f"https://img.youtube.com/vi/{YOUTUBE_VIDEO_ID}/maxresdefault.jpg"
+DEFAULT_VIDEO_ID = "jdI7MZfMEFc"
 
 
 class ClipRequest(BaseModel):
     note: str
     session_context: Optional[str] = ""
     video_time: Optional[int] = None
+    video_id: Optional[str] = None
 
 
 async def _find_or_create_page(client: httpx.AsyncClient, title: str) -> str:
@@ -96,11 +96,12 @@ async def _find_or_create_session_block(
 async def create_clip(req: ClipRequest):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     page_title = f"Monkigras {today}"
+    vid = req.video_id or DEFAULT_VIDEO_ID
 
     # Build clip note markdown (no session prefix — that's now the parent block)
     parts = [req.note]
     if req.video_time is not None:
-        stream_url = f"https://www.youtube.com/watch?v={YOUTUBE_VIDEO_ID}&t={req.video_time}s"
+        stream_url = f"https://www.youtube.com/watch?v={vid}&t={req.video_time}s"
         parts.append(f"⏱ [{_fmt_time(req.video_time)}]({stream_url})")
     markdown = "\n\n".join(parts)
 
@@ -136,7 +137,8 @@ async def create_clip(req: ClipRequest):
 
         # Attach live YouTube thumbnail to the clip note block
         try:
-            img_resp = await client.get(THUMBNAIL_URL, timeout=10)
+            thumbnail_url = f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg"
+            img_resp = await client.get(thumbnail_url, timeout=10)
             img_resp.raise_for_status()
             ct = img_resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
             ext = ct.split("/")[-1]

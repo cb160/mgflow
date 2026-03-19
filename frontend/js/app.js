@@ -465,17 +465,114 @@ setInterval(() => {
   });
 }, 60_000);
 
+// ── Stream management ─────────────────────────────────────────────────────
+
+const STREAMS_KEY = 'mgflow_streams';
+const ACTIVE_STREAM_KEY = 'mgflow_active_stream';
+const DEFAULT_STREAMS = [{ id: 'jdI7MZfMEFc', name: 'Monkigras Main Stream' }];
+
+function loadStreams() {
+  try { return JSON.parse(localStorage.getItem(STREAMS_KEY)) || DEFAULT_STREAMS; }
+  catch { return DEFAULT_STREAMS; }
+}
+
+function saveStreams(streams) {
+  localStorage.setItem(STREAMS_KEY, JSON.stringify(streams));
+}
+
+function getActiveStreamId() {
+  return localStorage.getItem(ACTIVE_STREAM_KEY) || loadStreams()[0]?.id || '';
+}
+
+function setActiveStreamId(id) {
+  localStorage.setItem(ACTIVE_STREAM_KEY, id);
+}
+
+function extractVideoId(input) {
+  const s = input.trim();
+  const patterns = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/,
+  ];
+  for (const p of patterns) {
+    const m = s.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+const streamSelectEl = document.getElementById('streamSelect');
+const streamAddForm = document.getElementById('streamAddForm');
+const streamNameInput = document.getElementById('streamNameInput');
+const streamUrlInput = document.getElementById('streamUrlInput');
+
+function renderStreamSelect() {
+  const streams = loadStreams();
+  const active = getActiveStreamId();
+  streamSelectEl.innerHTML = streams.map(s =>
+    `<option value="${escHtml(s.id)}"${s.id === active ? ' selected' : ''}>${escHtml(s.name)}</option>`
+  ).join('');
+}
+
+renderStreamSelect();
+
+streamSelectEl.addEventListener('change', () => {
+  const id = streamSelectEl.value;
+  setActiveStreamId(id);
+  if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(id);
+});
+
+document.getElementById('streamAddBtn').addEventListener('click', () => {
+  streamAddForm.classList.add('visible');
+  streamNameInput.focus();
+});
+
+document.getElementById('streamCancelBtn').addEventListener('click', () => {
+  streamAddForm.classList.remove('visible');
+  streamNameInput.value = '';
+  streamUrlInput.value = '';
+});
+
+document.getElementById('streamSaveBtn').addEventListener('click', () => {
+  const name = streamNameInput.value.trim();
+  const id = extractVideoId(streamUrlInput.value);
+  if (!name) { showToast('Enter a stream name', true); return; }
+  if (!id) { showToast('Invalid YouTube URL or video ID', true); return; }
+  const streams = loadStreams();
+  if (streams.find(s => s.id === id)) { showToast('Stream already added', true); return; }
+  streams.push({ id, name });
+  saveStreams(streams);
+  setActiveStreamId(id);
+  renderStreamSelect();
+  streamAddForm.classList.remove('visible');
+  streamNameInput.value = '';
+  streamUrlInput.value = '';
+  if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(id);
+  showToast(`Added: ${name}`);
+});
+
+document.getElementById('streamRemoveBtn').addEventListener('click', () => {
+  const streams = loadStreams();
+  if (streams.length <= 1) { showToast('Cannot remove the last stream', true); return; }
+  const active = getActiveStreamId();
+  const updated = streams.filter(s => s.id !== active);
+  saveStreams(updated);
+  setActiveStreamId(updated[0].id);
+  renderStreamSelect();
+  if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(updated[0].id);
+});
+
 // ── YouTube player ────────────────────────────────────────────────────────
 
 let ytPlayer = null;
 
 window.onYouTubeIframeAPIReady = function () {
   ytPlayer = new YT.Player('ytPlayer', {
-    videoId: 'jdI7MZfMEFc',
+    videoId: getActiveStreamId(),
     playerVars: { autoplay: 0, rel: 0, modestbranding: 1 },
-    events: {
-      onReady: () => { /* player ready */ }
-    }
+    events: { onReady: () => {} }
   });
 };
 
@@ -554,6 +651,7 @@ clipBtn.addEventListener('click', async () => {
 
   const videoTime = ytPlayer ? Math.floor(ytPlayer.getCurrentTime()) : null;
   const sessionContext = sessionEl ? sessionEl.value.trim() : '';
+  const videoId = getActiveStreamId();
 
   clipBtn.disabled = true;
   clipBtn.textContent = 'Clipping…';
@@ -562,7 +660,7 @@ clipBtn.addEventListener('click', async () => {
     const res = await fetch('/api/clip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note, session_context: sessionContext, video_time: videoTime }),
+      body: JSON.stringify({ note, session_context: sessionContext, video_time: videoTime, video_id: videoId }),
     });
     if (!res.ok) throw new Error(await res.text());
     clipBtn.classList.add('success');

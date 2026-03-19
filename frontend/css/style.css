@@ -182,6 +182,79 @@ body {
   gap: 14px;
 }
 
+/* ── Stream selector ── */
+.stream-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stream-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 4px 8px;
+  cursor: pointer;
+  appearance: auto;
+}
+.stream-select:focus { outline: none; border-color: var(--accent); }
+
+.stream-icon-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 1rem;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+.stream-icon-btn:hover { border-color: var(--accent); color: var(--text); }
+
+.stream-add-form {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+}
+.stream-add-form.visible { display: flex; }
+
+.stream-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 5px 8px;
+}
+.stream-input:focus { outline: none; border-color: var(--accent); }
+
+.stream-form-btns { display: flex; gap: 6px; }
+
+.stream-cancel-btn {
+  flex: 1;
+  padding: 9px 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.stream-cancel-btn:hover { border-color: var(--accent); color: var(--text); }
+
 .video-wrapper {
   position: relative;
   width: 100%;
