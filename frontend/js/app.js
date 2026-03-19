@@ -437,18 +437,16 @@ function connect() {
     } else {
       posts.set(uri, post);
       const card = renderCard(post);
-      // Insert newest-at-top: find the first card that's older than this post
-      let inserted = false;
-      const allCards = [...feedEl.children];
-      for (const existing of allCards) {
-        const existPost = posts.get(existing.dataset.uri);
-        if (existPost && new Date(existPost.indexed_at) < new Date(post.indexed_at)) {
-          feedEl.insertBefore(card, existing);
-          inserted = true;
-          break;
-        }
+      // Initial batch arrives newest-first → append keeps the order.
+      // Live posts arrive as they're polled (newest) → prepend to top.
+      // We distinguish: if the new post is newer than the current top card, prepend.
+      const firstCard = feedEl.firstElementChild;
+      const firstPost = firstCard ? posts.get(firstCard.dataset.uri) : null;
+      if (firstPost && new Date(post.indexed_at) > new Date(firstPost.indexed_at)) {
+        feedEl.prepend(card);
+      } else {
+        feedEl.appendChild(card);
       }
-      if (!inserted) feedEl.appendChild(card);
       updateCount();
     }
   };

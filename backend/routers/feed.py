@@ -79,11 +79,11 @@ async def get_timeline(db: AsyncSession = Depends(get_db)):
 @router.get("/stream")
 async def feed_stream():
     async def event_generator():
-        # Send initial batch — all posts since conference start, oldest first
+        # Send initial batch — all posts since conference start, newest first
         async with AsyncSessionLocal() as db:
             stmt = select(Post).where(
                 Post.indexed_at >= CONFERENCE_START
-            ).order_by(Post.indexed_at.asc())
+            ).order_by(Post.indexed_at.desc())
             result = await db.execute(stmt)
             initial = result.scalars().all()
 
