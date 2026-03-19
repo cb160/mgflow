@@ -79,7 +79,8 @@ async def fetch_posts(cursor: str | None = None) -> tuple[list[dict], str | None
     if cursor:
         params["cursor"] = cursor
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    headers = {"User-Agent": "mgflow/1.0 (https://github.com/cb160/mgflow)"}
+    async with httpx.AsyncClient(timeout=20, headers=headers) as client:
         resp = await client.get(SEARCH_URL, params=params)
         resp.raise_for_status()
         data = resp.json()
