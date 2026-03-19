@@ -16,7 +16,6 @@ router = APIRouter(prefix="/api/save", tags=["save"])
 logger = logging.getLogger(__name__)
 
 BLOCKS_URL = os.environ.get("BLOCKS_URL", "http://blocks.apps.svc.cluster.local")
-BLUESKY_CDN = "https://cdn.bsky.app/img/feed_thumbnail/plain/"
 
 
 def _post_url(handle: str, uri: str) -> str:
@@ -97,11 +96,8 @@ async def save_to_blocks(req: SaveToBlocksRequest):
                 embed = json.loads(post.embeds_json)
                 if embed.get("type") == "images":
                     for img in embed.get("images", []):
-                        link = img.get("thumb") or img.get("fullsize")
-                        if link:
-                            # Build CDN URL from CID
-                            did = post.uri.split("/")[2]
-                            image_url = f"{BLUESKY_CDN}{did}/{link}@jpeg"
+                        image_url = img.get("fullsize") or img.get("thumb")
+                        if image_url:
                             await _upload_image(client, block_id, image_url, img.get("alt", ""))
             except (json.JSONDecodeError, KeyError):
                 pass
