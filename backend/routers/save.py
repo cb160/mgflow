@@ -74,22 +74,25 @@ def _extract_images(embed: dict) -> list[tuple[str, str]]:
     return []
 
 
-async def _upload_image(client: httpx.AsyncClient, block_id: str, image_url: str, alt: str):
+async def _upload_image(client: httpx.AsyncClient, block_id: str, image_url: str, alt: str) -> str | None:
+    """Upload image attachment and return its blocks URL, or None on failure."""
     try:
         img_resp = await client.get(image_url, timeout=15)
         img_resp.raise_for_status()
         content_type = img_resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
         ext = content_type.split("/")[-1]
-        filename = f"image.{ext}"
         upload_resp = await client.post(
             f"{BLOCKS_URL}/api/attachments",
             data={"block_id": block_id},
-            files={"file": (filename, io.BytesIO(img_resp.content), content_type)},
+            files={"file": (f"image.{ext}", io.BytesIO(img_resp.content), content_type)},
         )
         upload_resp.raise_for_status()
-        logger.info("Uploaded image to blocks: %s", upload_resp.json().get("url"))
+        url = upload_resp.json().get("url")
+        logger.info("Uploaded image to blocks: %s", url)
+        return url
     except Exception as exc:
         logger.warning("Failed to upload image: %s", exc)
+        return None
 
 
 @router.post("")
@@ -108,12 +111,21 @@ async def save_to_blocks(req: SaveToBlocksRequest):
         page_id = await _find_or_create_page(client, page_title)
         block_id = await _create_block(client, page_id, markdown)
 
-        # Upload image attachments if present
+        # Upload image attachments and embed them in the block content
         if post.embeds_json:
             try:
                 embed = json.loads(post.embeds_json)
+                att_urls = []
                 for image_url, alt in _extract_images(embed):
-                    await _upload_image(client, block_id, image_url, alt)
+                    url = await _upload_image(client, block_id, image_url, alt)
+                    if url:
+                        att_urls.append((url, alt or "image"))
+                if att_urls:
+                    img_md = "\n\n".join(f"![{alt}]({url})" for url, alt in att_urls)
+                    await client.patch(
+                        f"{BLOCKS_URL}/api/blocks/{block_id}",
+                        json={"content": markdown + "\n\n" + img_md},
+                    )
             except (json.JSONDecodeError, KeyError):
                 pass
 

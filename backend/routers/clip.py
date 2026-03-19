@@ -135,7 +135,7 @@ async def create_clip(req: ClipRequest):
         resp.raise_for_status()
         block_id = resp.json()["id"]
 
-        # Attach live YouTube thumbnail to the clip note block
+        # Fetch thumbnail, upload as attachment, embed it in the block content
         try:
             thumbnail_url = f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg"
             img_resp = await client.get(thumbnail_url, timeout=10)
@@ -149,7 +149,13 @@ async def create_clip(req: ClipRequest):
                 files={"file": (f"clip_{ts_str}.{ext}", io.BytesIO(img_resp.content), ct)},
             )
             upload_resp.raise_for_status()
-            logger.info("Clip thumbnail saved: %s", upload_resp.json().get("url"))
+            att_url = upload_resp.json().get("url")
+            logger.info("Clip thumbnail saved: %s", att_url)
+            if att_url:
+                await client.patch(
+                    f"{BLOCKS_URL}/api/blocks/{block_id}",
+                    json={"content": markdown + f"\n\n![stream screenshot]({att_url})"},
+                )
         except Exception as exc:
             logger.warning("Clip thumbnail failed: %s", exc)
 
