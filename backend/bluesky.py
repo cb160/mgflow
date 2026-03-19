@@ -4,10 +4,10 @@ import httpx
 from datetime import datetime
 from typing import Any
 
-SEARCH_URL = "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
+SEARCH_URL = "https://bsky.social/xrpc/app.bsky.feed.searchPosts"
 SESSION_URL = "https://bsky.social/xrpc/com.atproto.server.createSession"
-BLUESKY_HANDLE = os.environ.get("BLUESKY_HANDLE", "")
-BLUESKY_APP_PASSWORD = os.environ.get("BLUESKY_APP_PASSWORD", "")
+BLUESKY_HANDLE = os.environ.get("BSKY_HANDLE", "")
+BLUESKY_APP_PASSWORD = os.environ.get("BSKY_APP_PASSWORD", "")
 
 _access_token: str | None = None
 
