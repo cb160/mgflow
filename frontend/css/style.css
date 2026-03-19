@@ -44,7 +44,7 @@ body {
 }
 
 .header-inner {
-  max-width: var(--max-w);
+  max-width: 1200px;
   margin: 0 auto;
   height: 100%;
   display: flex;
@@ -131,18 +131,129 @@ body {
   z-index: 91;
 }
 
-/* ── Feed container ── */
-.feed-container {
-  max-width: var(--max-w);
-  margin: 0 auto;
-  padding-top: calc(var(--chrome-h) + 12px);
-  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
-  padding-left: 0;
-  padding-right: 0;
+/* ── Video toggle button ── */
+.video-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 3px 7px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.video-toggle:hover, .video-toggle.active { border-color: var(--accent); color: var(--text); }
+
+/* ── Two-column layout ── */
+.app-layout {
+  display: flex;
+  margin-top: var(--chrome-h);
+  min-height: calc(100vh - var(--chrome-h));
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-@media (max-width: 720px) {
-  .feed-container { padding-left: 0; padding-right: 0; }
+/* ── Video panel ── */
+.video-panel {
+  width: 360px;
+  flex-shrink: 0;
+  position: sticky;
+  top: var(--chrome-h);
+  max-height: calc(100vh - var(--chrome-h));
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 14px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 */
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.video-wrapper > div,
+.video-wrapper iframe {
+  position: absolute !important;
+  top: 0; left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 8px;
+}
+
+.panel-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.panel-textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  padding: 8px 10px;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+.panel-textarea:focus { outline: none; border-color: var(--accent); }
+
+.session-textarea { min-height: 48px; }
+.clip-textarea    { min-height: 72px; }
+
+.clip-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 0;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.clip-btn:hover  { background: var(--accent-dim); }
+.clip-btn:disabled { opacity: 0.55; cursor: default; }
+.clip-btn.success  { background: var(--green); }
+
+/* ── Feed section ── */
+.feed-section {
+  flex: 1;
+  min-width: 0;
+  padding-top: 12px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
+}
+
+/* ── Mobile: video panel hidden by default, toggle shows it ── */
+@media (max-width: 900px) {
+  .app-layout { flex-direction: column; }
+
+  .video-panel {
+    position: relative;
+    top: 0;
+    max-height: none;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    display: none;
+  }
+  .video-panel.visible { display: flex; }
 }
 
 /* ── Post card ── */

@@ -15,6 +15,7 @@
         <span class="version">v{{ APP_VERSION }}</span>
       </div>
       <div class="header-right">
+        <button class="video-toggle" id="videoToggle" title="Show/hide stream">📺</button>
         <span class="status-dot" id="statusDot" title="Connecting…"></span>
         <span class="post-count" id="postCount">0 posts</span>
       </div>
@@ -26,12 +27,41 @@
     <div class="timeline-tooltip" id="timelineTooltip"></div>
   </div>
 
-  <main class="feed-container">
-    <div id="feed"></div>
-  </main>
+  <div class="app-layout">
+
+    <!-- ── Video panel ── -->
+    <aside class="video-panel" id="videoPanel">
+
+      <div class="video-wrapper">
+        <div id="ytPlayer"></div>
+      </div>
+
+      <div class="session-block">
+        <label class="panel-label" for="sessionContext">Current session</label>
+        <textarea id="sessionContext" class="panel-textarea session-textarea"
+                  placeholder="Talk title · Speaker…" rows="2"></textarea>
+      </div>
+
+      <div class="clip-block">
+        <label class="panel-label" for="clipNote">Clip note</label>
+        <textarea id="clipNote" class="panel-textarea clip-textarea"
+                  placeholder="What's worth noting right now…" rows="3"></textarea>
+        <button class="clip-btn" id="clipBtn">📎 Clip to Blocks</button>
+      </div>
+
+    </aside>
+
+    <!-- ── Feed ── -->
+    <section class="feed-section">
+      <div id="feed"></div>
+    </section>
+
+  </div>
 
   <div class="toast" id="toast"></div>
 
+  <!-- YouTube IFrame API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

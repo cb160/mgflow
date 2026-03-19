@@ -481,3 +481,80 @@ setInterval(() => {
     el.textContent = relativeTime(el.getAttribute('datetime'));
   });
 }, 60_000);
+
+// ── YouTube player ────────────────────────────────────────────────────────
+
+let ytPlayer = null;
+
+window.onYouTubeIframeAPIReady = function () {
+  ytPlayer = new YT.Player('ytPlayer', {
+    videoId: 'jdI7MZfMEFc',
+    playerVars: { autoplay: 0, rel: 0, modestbranding: 1 },
+    events: {
+      onReady: () => { /* player ready */ }
+    }
+  });
+};
+
+// ── Video panel toggle ────────────────────────────────────────────────────
+
+const videoToggleBtn = document.getElementById('videoToggle');
+const videoPanel = document.getElementById('videoPanel');
+
+videoToggleBtn.addEventListener('click', () => {
+  const isVisible = videoPanel.classList.toggle('visible');
+  videoToggleBtn.classList.toggle('active', isVisible);
+});
+
+// ── Session context persistence ───────────────────────────────────────────
+
+const SESSION_KEY = 'mgflow_session';
+const sessionEl = document.getElementById('sessionContext');
+
+if (sessionEl) {
+  sessionEl.value = localStorage.getItem(SESSION_KEY) || '';
+  sessionEl.addEventListener('input', () => {
+    localStorage.setItem(SESSION_KEY, sessionEl.value);
+  });
+}
+
+// ── Clip handler ──────────────────────────────────────────────────────────
+
+const clipBtn = document.getElementById('clipBtn');
+const clipNoteEl = document.getElementById('clipNote');
+
+clipBtn.addEventListener('click', async () => {
+  const note = clipNoteEl.value.trim();
+  if (!note) {
+    showToast('Add a note before clipping', true);
+    return;
+  }
+
+  const videoTime = ytPlayer ? Math.floor(ytPlayer.getCurrentTime()) : null;
+  const sessionContext = sessionEl ? sessionEl.value.trim() : '';
+
+  clipBtn.disabled = true;
+  clipBtn.textContent = 'Clipping…';
+
+  try {
+    const res = await fetch('/api/clip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note, session_context: sessionContext, video_time: videoTime }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    clipBtn.classList.add('success');
+    clipBtn.textContent = 'Clipped ✓';
+    clipNoteEl.value = '';
+    showToast('Clipped to Blocks!');
+    setTimeout(() => {
+      clipBtn.classList.remove('success');
+      clipBtn.textContent = '📎 Clip to Blocks';
+      clipBtn.disabled = false;
+    }, 2500);
+  } catch (err) {
+    clipBtn.disabled = false;
+    clipBtn.textContent = '📎 Clip to Blocks';
+    showToast('Clip failed: ' + err.message, true);
+  }
+});
