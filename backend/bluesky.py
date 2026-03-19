@@ -6,7 +6,8 @@ from typing import Any
 
 SEARCH_URL = "https://bsky.social/xrpc/app.bsky.feed.searchPosts"
 SESSION_URL = "https://bsky.social/xrpc/com.atproto.server.createSession"
-BLUESKY_HANDLE = os.environ.get("BSKY_HANDLE", "")
+_raw_handle = os.environ.get("BSKY_HANDLE", "")
+BLUESKY_HANDLE = _raw_handle if "." in _raw_handle else f"{_raw_handle}.bsky.social"
 BLUESKY_APP_PASSWORD = os.environ.get("BSKY_APP_PASSWORD", "")
 
 _access_token: str | None = None
