@@ -1,9 +1,31 @@
 import json
+import os
 import httpx
 from datetime import datetime
 from typing import Any
 
 SEARCH_URL = "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
+SESSION_URL = "https://bsky.social/xrpc/com.atproto.server.createSession"
+BLUESKY_HANDLE = os.environ.get("BLUESKY_HANDLE", "")
+BLUESKY_APP_PASSWORD = os.environ.get("BLUESKY_APP_PASSWORD", "")
+
+_access_token: str | None = None
+
+
+async def _get_token() -> str | None:
+    global _access_token
+    if _access_token:
+        return _access_token
+    if not BLUESKY_HANDLE or not BLUESKY_APP_PASSWORD:
+        return None
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(SESSION_URL, json={
+            "identifier": BLUESKY_HANDLE,
+            "password": BLUESKY_APP_PASSWORD,
+        })
+        resp.raise_for_status()
+        _access_token = resp.json()["accessJwt"]
+    return _access_token
 
 
 def _parse_embed(embed: dict | None) -> dict | None:
@@ -71,6 +93,7 @@ def _parse_post_view(post_view: dict) -> dict | None:
 
 
 async def fetch_posts(cursor: str | None = None) -> tuple[list[dict], str | None]:
+    global _access_token
     params: dict[str, Any] = {
         "q": "#monkigras",
         "sort": "latest",
@@ -79,9 +102,20 @@ async def fetch_posts(cursor: str | None = None) -> tuple[list[dict], str | None
     if cursor:
         params["cursor"] = cursor
 
-    headers = {"User-Agent": "mgflow/1.0 (https://github.com/cb160/mgflow)"}
+    token = await _get_token()
+    headers: dict[str, str] = {"User-Agent": "mgflow/1.0 (https://github.com/cb160/mgflow)"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     async with httpx.AsyncClient(timeout=20, headers=headers) as client:
         resp = await client.get(SEARCH_URL, params=params)
+        if resp.status_code == 401 and token:
+            # Token expired — refresh once
+            _access_token = None
+            token = await _get_token()
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+            resp = await client.get(SEARCH_URL, params=params)
         resp.raise_for_status()
         data = resp.json()
 
