@@ -77,15 +77,16 @@ async def _upload_image(client: httpx.AsyncClient, block_id: str, image_url: str
     try:
         img_resp = await client.get(image_url, timeout=15)
         img_resp.raise_for_status()
-        content_type = img_resp.headers.get("content-type", "image/jpeg")
-        ext = content_type.split("/")[-1].split(";")[0]
+        content_type = img_resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+        ext = content_type.split("/")[-1]
         filename = f"image.{ext}"
-        files = {
-            "file": (filename, io.BytesIO(img_resp.content), content_type),
-            "block_id": (None, block_id),
-        }
-        upload_resp = await client.post(f"{BLOCKS_URL}/api/attachments", files=files)
+        upload_resp = await client.post(
+            f"{BLOCKS_URL}/api/attachments",
+            data={"block_id": block_id},
+            files={"file": (filename, io.BytesIO(img_resp.content), content_type)},
+        )
         upload_resp.raise_for_status()
+        logger.info("Uploaded image to blocks: %s", upload_resp.json().get("url"))
     except Exception as exc:
         logger.warning("Failed to upload image: %s", exc)
 
