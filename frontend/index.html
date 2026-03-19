@@ -22,11 +22,6 @@
     </div>
   </header>
 
-  <div class="timeline-strip" id="timelineStrip">
-    <canvas id="timelineCanvas"></canvas>
-    <div class="timeline-tooltip" id="timelineTooltip"></div>
-  </div>
-
   <div class="app-layout">
 
     <!-- ── Video panel ── -->
@@ -51,10 +46,18 @@
 
     </aside>
 
+    <div class="resizer" id="resizer"></div>
+
     <!-- ── Feed ── -->
     <section class="feed-section">
       <div id="feed"></div>
     </section>
+
+    <!-- ── Timeline (vertical, right) ── -->
+    <div class="timeline-panel" id="timelinePanel">
+      <canvas id="timelineCanvas"></canvas>
+      <div class="timeline-tooltip" id="timelineTooltip"></div>
+    </div>
 
   </div>
 

@@ -11,8 +11,9 @@
   --red: #f85149;
   --gold: #f0c040;
   --header-h: 52px;
-  --timeline-h: 60px;
-  --chrome-h: calc(var(--header-h) + var(--timeline-h));
+  --chrome-h: var(--header-h);
+  --timeline-w: 72px;
+  --video-w: 480px;
   --max-w: 680px;
   --radius: 12px;
 }
@@ -95,18 +96,17 @@ body {
   color: var(--muted);
 }
 
-/* ── Timeline strip ── */
-.timeline-strip {
-  position: fixed;
+/* ── Timeline panel (vertical, right side) ── */
+.timeline-panel {
+  width: var(--timeline-w);
+  flex-shrink: 0;
+  position: sticky;
   top: var(--header-h);
-  left: 0;
-  right: 0;
-  height: var(--timeline-h);
+  height: calc(100vh - var(--header-h));
+  overflow: hidden;
+  border-left: 1px solid var(--border);
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  z-index: 90;
   cursor: crosshair;
-  padding: 0 env(safe-area-inset-right, 0) 0 env(safe-area-inset-left, 0);
 }
 
 #timelineCanvas {
@@ -116,8 +116,7 @@ body {
 }
 
 .timeline-tooltip {
-  position: absolute;
-  bottom: calc(100% + 6px);
+  position: fixed;
   background: #2d333b;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -127,7 +126,7 @@ body {
   pointer-events: none;
   white-space: nowrap;
   display: none;
-  transform: translateX(-50%);
+  transform: translateX(-100%) translateX(-8px);
   z-index: 91;
 }
 
@@ -145,23 +144,36 @@ body {
 }
 .video-toggle:hover, .video-toggle.active { border-color: var(--accent); color: var(--text); }
 
-/* ── Two-column layout ── */
+/* ── Resizer handle ── */
+.resizer {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  transition: background 0.15s;
+}
+.resizer:hover, .resizer.dragging { background: var(--accent); }
+
+/* ── Three-column layout ── */
 .app-layout {
   display: flex;
-  margin-top: var(--chrome-h);
-  min-height: calc(100vh - var(--chrome-h));
-  max-width: 1200px;
-  margin-left: auto;
-  margin-right: auto;
+  margin-top: var(--header-h);
+  min-height: calc(100vh - var(--header-h));
+  width: 100%;
 }
 
 /* ── Video panel ── */
 .video-panel {
-  width: 360px;
+  width: var(--video-w);
+  min-width: 240px;
+  max-width: 70vw;
   flex-shrink: 0;
   position: sticky;
-  top: var(--chrome-h);
-  max-height: calc(100vh - var(--chrome-h));
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
   overflow-y: auto;
   border-right: 1px solid var(--border);
   padding: 14px 14px 20px;
@@ -236,6 +248,7 @@ body {
 .feed-section {
   flex: 1;
   min-width: 0;
+  max-width: 720px;
   padding-top: 12px;
   padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
 }
@@ -247,13 +260,18 @@ body {
   .video-panel {
     position: relative;
     top: 0;
+    height: auto;
     max-height: none;
-    width: 100%;
+    width: 100% !important;
+    max-width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--border);
     display: none;
   }
   .video-panel.visible { display: flex; }
+
+  .resizer { display: none; }
+  .timeline-panel { display: none; }
 }
 
 /* ── Post card ── */

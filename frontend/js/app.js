@@ -76,20 +76,19 @@ function drawTimeline() {
   ctx.scale(dpr, dpr);
 
   const { buckets } = timelineData;
-  const LABEL_H = 16;
-  const MARKER_H = 8;
-  const BAR_AREA = H - LABEL_H - MARKER_H - 4;
-  const PAD = 32; // left/right padding for labels
+  const LABEL_W = 30; // left space for HH:MM labels
+  const BAR_AREA = W - LABEL_W - 2;
+  const BUCKET_MS = 15 * 60 * 1000;
 
   const firstBucket = new Date(buckets[0].start);
   const lastBucket = new Date(buckets[buckets.length - 1].start);
-  const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
+  const timeSpan = lastBucket - firstBucket + BUCKET_MS;
   const now = Date.now();
 
   const maxCount = Math.max(...buckets.map(b => b.count), 1);
 
-  function timeToX(t) {
-    return PAD + ((t - firstBucket) / timeSpan) * (W - PAD * 2);
+  function timeToY(t) {
+    return ((t - firstBucket) / timeSpan) * H;
   }
 
   // Background
@@ -100,55 +99,43 @@ function drawTimeline() {
   ctx.strokeStyle = '#30363d';
   ctx.lineWidth = 1;
   ctx.fillStyle = '#8b949e';
-  ctx.font = `10px -apple-system, sans-serif`;
-  ctx.textAlign = 'center';
+  ctx.font = `9px -apple-system, sans-serif`;
+  ctx.textAlign = 'right';
 
   const startHour = new Date(firstBucket);
   startHour.setUTCMinutes(0, 0, 0);
-  for (let t = startHour.getTime(); t <= lastBucket.getTime() + 3600000; t += 3600000) {
-    const x = timeToX(t);
-    if (x < PAD - 10 || x > W - PAD + 10) continue;
+  for (let t = startHour.getTime(); t <= lastBucket.getTime() + BUCKET_MS; t += 3600000) {
+    const y = timeToY(t);
+    if (y < 6 || y > H - 2) continue;
     ctx.beginPath();
-    ctx.moveTo(x, LABEL_H);
-    ctx.lineTo(x, H - 2);
+    ctx.moveTo(LABEL_W, y);
+    ctx.lineTo(W, y);
     ctx.stroke();
-    ctx.fillText(fmtHHMM(new Date(t)), x, LABEL_H - 2);
+    ctx.fillText(fmtHHMM(new Date(t)), LABEL_W - 2, y + 3);
   }
 
-  // Bars
-  const bucketWidth = Math.max(2, (W - PAD * 2) / buckets.length - 1);
+  // Bars (horizontal, time = Y axis)
+  const bucketPxH = Math.max(2, (H / buckets.length) - 1);
   buckets.forEach(b => {
-    const x = timeToX(new Date(b.start).getTime());
-    const barH = (b.count / maxCount) * BAR_AREA;
-    const y = H - barH - MARKER_H - 2;
+    const y = timeToY(new Date(b.start).getTime());
+    const barW = (b.count / maxCount) * BAR_AREA;
 
-    // Bar fill
-    ctx.fillStyle = b.saved_count > 0 ? '#1d9bf040' : '#30363d';
-    ctx.fillRect(x - bucketWidth / 2, y, bucketWidth, barH);
+    ctx.fillStyle = b.saved_count > 0 ? '#1d9bf040' : '#2d333b';
+    ctx.fillRect(LABEL_W, y, barW, bucketPxH - 1);
 
-    // Gold top cap if has saves
+    // Gold left cap for saved buckets
     if (b.saved_count > 0) {
       ctx.fillStyle = '#f0c040';
-      ctx.fillRect(x - bucketWidth / 2, y, bucketWidth, 2);
+      ctx.fillRect(LABEL_W, y, 2, bucketPxH - 1);
     }
   });
 
-  // Gold markers (saved posts) — dots below bars
-  const savedBuckets = buckets.filter(b => b.saved_count > 0);
-  savedBuckets.forEach(b => {
-    const x = timeToX(new Date(b.start).getTime());
-    ctx.beginPath();
-    ctx.arc(x, H - MARKER_H / 2, 3, 0, Math.PI * 2);
-    ctx.fillStyle = '#f0c040';
-    ctx.fill();
-  });
-
   // Current time indicator
-  if (now > firstBucket && now < firstBucket.getTime() + timeSpan + 3600000) {
-    const x = timeToX(now);
+  const nowY = timeToY(now);
+  if (nowY > 0 && nowY < H) {
     ctx.beginPath();
-    ctx.moveTo(x, LABEL_H);
-    ctx.lineTo(x, H);
+    ctx.moveTo(LABEL_W, nowY);
+    ctx.lineTo(W, nowY);
     ctx.strokeStyle = '#1d9bf0';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([3, 3]);
@@ -160,16 +147,15 @@ function drawTimeline() {
 function timelineHover(e) {
   if (!timelineData || !timelineData.buckets.length) return;
   const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const W = rect.width;
-  const PAD = 32;
+  const y = e.clientY - rect.top;
+  const H = rect.height;
   const { buckets } = timelineData;
 
   const firstBucket = new Date(buckets[0].start);
   const lastBucket = new Date(buckets[buckets.length - 1].start);
   const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
 
-  const t = firstBucket.getTime() + ((x - PAD) / (W - PAD * 2)) * timeSpan;
+  const t = firstBucket.getTime() + (y / H) * timeSpan;
   const BUCKET_MS = 15 * 60 * 1000;
   const bucket = buckets.find(b => {
     const bs = new Date(b.start).getTime();
@@ -178,7 +164,8 @@ function timelineHover(e) {
 
   if (bucket) {
     tooltip.style.display = 'block';
-    tooltip.style.left = e.clientX + 'px';
+    tooltip.style.top = e.clientY + 'px';
+    tooltip.style.left = rect.left + 'px';
     tooltip.textContent = `${fmtHHMM(new Date(bucket.start))} — ${bucket.count} posts` +
                           (bucket.saved_count ? ` · ${bucket.saved_count} saved` : '');
   } else {
@@ -189,16 +176,15 @@ function timelineHover(e) {
 function timelineClick(e) {
   if (!timelineData || !timelineData.buckets.length) return;
   const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const W = rect.width;
-  const PAD = 32;
+  const y = e.clientY - rect.top;
+  const H = rect.height;
   const { buckets } = timelineData;
 
   const firstBucket = new Date(buckets[0].start);
   const lastBucket = new Date(buckets[buckets.length - 1].start);
   const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
 
-  const t = firstBucket.getTime() + ((x - PAD) / (W - PAD * 2)) * timeSpan;
+  const t = firstBucket.getTime() + (y / H) * timeSpan;
   const BUCKET_MS = 15 * 60 * 1000;
   const bucket = buckets.find(b => {
     const bs = new Date(b.start).getTime();
@@ -207,13 +193,12 @@ function timelineClick(e) {
 
   if (!bucket) return;
 
-  // Find the first card in this time bucket and scroll to it
+  // With newest-at-top, the first matching card in DOM is the newest in the bucket
   const bucketStart = new Date(bucket.start);
   const bucketEnd = new Date(bucketStart.getTime() + BUCKET_MS);
   const cards = feedEl.querySelectorAll('[data-uri]');
   for (const card of cards) {
-    const uri = card.dataset.uri;
-    const post = posts.get(uri);
+    const post = posts.get(card.dataset.uri);
     if (!post) continue;
     const dt = new Date(post.indexed_at);
     if (dt >= bucketStart && dt < bucketEnd) {
@@ -452,12 +437,12 @@ function connect() {
     } else {
       posts.set(uri, post);
       const card = renderCard(post);
-      // Insert in chronological order (newest last = bottom of feed)
+      // Insert newest-at-top: find the first card that's older than this post
       let inserted = false;
       const allCards = [...feedEl.children];
       for (const existing of allCards) {
         const existPost = posts.get(existing.dataset.uri);
-        if (existPost && new Date(existPost.indexed_at) > new Date(post.indexed_at)) {
+        if (existPost && new Date(existPost.indexed_at) < new Date(post.indexed_at)) {
           feedEl.insertBefore(card, existing);
           inserted = true;
           break;
@@ -504,6 +489,45 @@ const videoPanel = document.getElementById('videoPanel');
 videoToggleBtn.addEventListener('click', () => {
   const isVisible = videoPanel.classList.toggle('visible');
   videoToggleBtn.classList.toggle('active', isVisible);
+});
+
+// ── Resize handle ─────────────────────────────────────────────────────────
+
+const resizerEl = document.getElementById('resizer');
+const VIDEO_W_KEY = 'mgflow_video_w';
+
+// Restore saved panel width
+const savedVideoW = localStorage.getItem(VIDEO_W_KEY);
+if (savedVideoW && videoPanel) videoPanel.style.width = savedVideoW + 'px';
+
+let isResizing = false;
+let resizeStartX = 0;
+let resizeStartW = 0;
+
+resizerEl.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  resizeStartX = e.clientX;
+  resizeStartW = videoPanel.offsetWidth;
+  resizerEl.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const newW = Math.max(240, Math.min(resizeStartW + (e.clientX - resizeStartX), window.innerWidth * 0.7));
+  videoPanel.style.width = newW + 'px';
+});
+
+document.addEventListener('mouseup', () => {
+  if (!isResizing) return;
+  isResizing = false;
+  resizerEl.classList.remove('dragging');
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+  localStorage.setItem(VIDEO_W_KEY, videoPanel.offsetWidth);
+  drawTimeline();
 });
 
 // ── Session context persistence ───────────────────────────────────────────
