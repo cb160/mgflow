@@ -9,7 +9,10 @@
   --green: #3fb950;
   --amber: #d29922;
   --red: #f85149;
+  --gold: #f0c040;
   --header-h: 52px;
+  --timeline-h: 60px;
+  --chrome-h: calc(var(--header-h) + var(--timeline-h));
   --max-w: 680px;
   --radius: 12px;
 }
@@ -64,6 +67,13 @@ body {
   font-weight: 500;
 }
 
+.version {
+  margin-left: 8px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -85,11 +95,47 @@ body {
   color: var(--muted);
 }
 
+/* ── Timeline strip ── */
+.timeline-strip {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  height: var(--timeline-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 90;
+  cursor: crosshair;
+  padding: 0 env(safe-area-inset-right, 0) 0 env(safe-area-inset-left, 0);
+}
+
+#timelineCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.timeline-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  background: #2d333b;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: var(--text);
+  pointer-events: none;
+  white-space: nowrap;
+  display: none;
+  transform: translateX(-50%);
+  z-index: 91;
+}
+
 /* ── Feed container ── */
 .feed-container {
   max-width: var(--max-w);
   margin: 0 auto;
-  padding-top: calc(var(--header-h) + 12px);
+  padding-top: calc(var(--chrome-h) + 12px);
   padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
   padding-left: 0;
   padding-right: 0;
@@ -119,6 +165,8 @@ body {
 }
 
 .post-card:hover { border-color: #484f58; }
+.post-card.is-saved { border-left: 3px solid var(--gold); }
+.post-card.highlight { border-color: var(--accent); transition: border-color 0s; }
 
 .post-header {
   display: flex;

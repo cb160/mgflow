@@ -1,13 +1,13 @@
 'use strict';
 
-const SAVED_KEY = 'mgflow_saved';
-const posts = new Map(); // uri → post data
-let savedUris = new Set(JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'));
+const posts = new Map(); // uri → post data (source of truth)
 
 const feedEl = document.getElementById('feed');
 const countEl = document.getElementById('postCount');
 const dotEl = document.getElementById('statusDot');
 const toastEl = document.getElementById('toast');
+const canvas = document.getElementById('timelineCanvas');
+const tooltip = document.getElementById('timelineTooltip');
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -19,12 +19,20 @@ function relativeTime(isoStr) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
+function fmtHHMM(date) {
+  return date.getUTCHours().toString().padStart(2, '0') + ':' +
+         date.getUTCMinutes().toString().padStart(2, '0');
+}
+
 function colourHashtags(text) {
   return text.replace(/(#\w+)/g, '<span class="hashtag">$1</span>');
 }
 
 function escHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function showToast(msg, isError = false) {
@@ -39,15 +47,193 @@ function updateCount() {
   countEl.textContent = `${n} post${n !== 1 ? 's' : ''}`;
 }
 
-function persistSaved() {
-  localStorage.setItem(SAVED_KEY, JSON.stringify([...savedUris]));
+// ── Timeline ─────────────────────────────────────────────────────────────
+
+let timelineData = null; // {buckets, conference_start, total, saved_total}
+
+async function refreshTimeline() {
+  try {
+    const r = await fetch('/api/feed/timeline');
+    if (!r.ok) return;
+    timelineData = await r.json();
+    drawTimeline();
+  } catch {}
 }
+
+function drawTimeline() {
+  if (!timelineData || !timelineData.buckets.length) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const W = rect.width;
+  const H = rect.height;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const { buckets } = timelineData;
+  const LABEL_H = 16;
+  const MARKER_H = 8;
+  const BAR_AREA = H - LABEL_H - MARKER_H - 4;
+  const PAD = 32; // left/right padding for labels
+
+  const firstBucket = new Date(buckets[0].start);
+  const lastBucket = new Date(buckets[buckets.length - 1].start);
+  const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
+  const now = Date.now();
+
+  const maxCount = Math.max(...buckets.map(b => b.count), 1);
+
+  function timeToX(t) {
+    return PAD + ((t - firstBucket) / timeSpan) * (W - PAD * 2);
+  }
+
+  // Background
+  ctx.fillStyle = '#161b22';
+  ctx.fillRect(0, 0, W, H);
+
+  // Hour gridlines + labels
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#8b949e';
+  ctx.font = `10px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+
+  const startHour = new Date(firstBucket);
+  startHour.setUTCMinutes(0, 0, 0);
+  for (let t = startHour.getTime(); t <= lastBucket.getTime() + 3600000; t += 3600000) {
+    const x = timeToX(t);
+    if (x < PAD - 10 || x > W - PAD + 10) continue;
+    ctx.beginPath();
+    ctx.moveTo(x, LABEL_H);
+    ctx.lineTo(x, H - 2);
+    ctx.stroke();
+    ctx.fillText(fmtHHMM(new Date(t)), x, LABEL_H - 2);
+  }
+
+  // Bars
+  const bucketWidth = Math.max(2, (W - PAD * 2) / buckets.length - 1);
+  buckets.forEach(b => {
+    const x = timeToX(new Date(b.start).getTime());
+    const barH = (b.count / maxCount) * BAR_AREA;
+    const y = H - barH - MARKER_H - 2;
+
+    // Bar fill
+    ctx.fillStyle = b.saved_count > 0 ? '#1d9bf040' : '#30363d';
+    ctx.fillRect(x - bucketWidth / 2, y, bucketWidth, barH);
+
+    // Gold top cap if has saves
+    if (b.saved_count > 0) {
+      ctx.fillStyle = '#f0c040';
+      ctx.fillRect(x - bucketWidth / 2, y, bucketWidth, 2);
+    }
+  });
+
+  // Gold markers (saved posts) — dots below bars
+  const savedBuckets = buckets.filter(b => b.saved_count > 0);
+  savedBuckets.forEach(b => {
+    const x = timeToX(new Date(b.start).getTime());
+    ctx.beginPath();
+    ctx.arc(x, H - MARKER_H / 2, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#f0c040';
+    ctx.fill();
+  });
+
+  // Current time indicator
+  if (now > firstBucket && now < firstBucket.getTime() + timeSpan + 3600000) {
+    const x = timeToX(now);
+    ctx.beginPath();
+    ctx.moveTo(x, LABEL_H);
+    ctx.lineTo(x, H);
+    ctx.strokeStyle = '#1d9bf0';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function timelineHover(e) {
+  if (!timelineData || !timelineData.buckets.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const W = rect.width;
+  const PAD = 32;
+  const { buckets } = timelineData;
+
+  const firstBucket = new Date(buckets[0].start);
+  const lastBucket = new Date(buckets[buckets.length - 1].start);
+  const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
+
+  const t = firstBucket.getTime() + ((x - PAD) / (W - PAD * 2)) * timeSpan;
+  const BUCKET_MS = 15 * 60 * 1000;
+  const bucket = buckets.find(b => {
+    const bs = new Date(b.start).getTime();
+    return t >= bs && t < bs + BUCKET_MS;
+  });
+
+  if (bucket) {
+    tooltip.style.display = 'block';
+    tooltip.style.left = e.clientX + 'px';
+    tooltip.textContent = `${fmtHHMM(new Date(bucket.start))} — ${bucket.count} posts` +
+                          (bucket.saved_count ? ` · ${bucket.saved_count} saved` : '');
+  } else {
+    tooltip.style.display = 'none';
+  }
+}
+
+function timelineClick(e) {
+  if (!timelineData || !timelineData.buckets.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const W = rect.width;
+  const PAD = 32;
+  const { buckets } = timelineData;
+
+  const firstBucket = new Date(buckets[0].start);
+  const lastBucket = new Date(buckets[buckets.length - 1].start);
+  const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
+
+  const t = firstBucket.getTime() + ((x - PAD) / (W - PAD * 2)) * timeSpan;
+  const BUCKET_MS = 15 * 60 * 1000;
+  const bucket = buckets.find(b => {
+    const bs = new Date(b.start).getTime();
+    return t >= bs && t < bs + BUCKET_MS;
+  });
+
+  if (!bucket) return;
+
+  // Find the first card in this time bucket and scroll to it
+  const bucketStart = new Date(bucket.start);
+  const bucketEnd = new Date(bucketStart.getTime() + BUCKET_MS);
+  const cards = feedEl.querySelectorAll('[data-uri]');
+  for (const card of cards) {
+    const uri = card.dataset.uri;
+    const post = posts.get(uri);
+    if (!post) continue;
+    const dt = new Date(post.indexed_at);
+    if (dt >= bucketStart && dt < bucketEnd) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      card.classList.add('highlight');
+      setTimeout(() => card.classList.remove('highlight'), 1500);
+      return;
+    }
+  }
+}
+
+canvas.addEventListener('mousemove', timelineHover);
+canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+canvas.addEventListener('click', timelineClick);
+window.addEventListener('resize', drawTimeline);
 
 // ── Embed rendering ───────────────────────────────────────────────────────
 
 function renderQuote(q, nestedEmbed) {
   if (!q) return '';
-  const name = q.author_display_name || q.author_handle || '';
   const nestedHtml = nestedEmbed ? renderEmbedObj(nestedEmbed) : '';
   return `<div class="embed-quote">
     <div class="quote-author">@${escHtml(q.author_handle || '')}</div>
@@ -99,7 +285,7 @@ function renderEmbed(embedJson) {
   }
 
   if (embed.type === 'recordWithMedia') {
-    return renderEmbed(embed.media) + renderQuote(embed.quote, null);
+    return renderEmbed(JSON.stringify(embed.media)) + renderQuote(embed.quote, null);
   }
 
   if (embed.type === 'quote') {
@@ -117,13 +303,13 @@ function buildCdnUrl(img) {
 
 function renderCard(post) {
   const uri = post.uri;
-  const saved = savedUris.has(uri);
+  const saved = post.saved_to_blocks || false;
   const avatarSrc = post.author_avatar || '';
   const displayName = post.author_display_name || post.author_handle;
   const embed = renderEmbed(post.embeds_json);
 
   const card = document.createElement('article');
-  card.className = 'post-card';
+  card.className = 'post-card' + (saved ? ' is-saved' : '');
   card.dataset.uri = uri;
   card.innerHTML = `
     <div class="post-header">
@@ -170,15 +356,27 @@ function updateCardCounts(post) {
   card.querySelector('.repost-count').textContent = post.repost_count;
 }
 
+function updateCardSaved(uri) {
+  const card = feedEl.querySelector(`[data-uri="${CSS.escape(uri)}"]`);
+  if (!card) return;
+  card.classList.add('is-saved');
+  const btn = card.querySelector('.save-btn');
+  btn.classList.remove('saving');
+  btn.classList.add('saved');
+  btn.textContent = 'Saved ✓';
+}
+
 // ── Save handler ──────────────────────────────────────────────────────────
 
 async function handleSave(e) {
   const btn = e.currentTarget;
   const uri = btn.dataset.uri;
-  if (btn.classList.contains('saved') || btn.classList.contains('saving')) return;
+  if (btn.classList.contains('saving')) return;
 
+  const wasAlreadySaved = btn.classList.contains('saved');
   btn.classList.add('saving');
-  btn.textContent = 'Saving…';
+  btn.classList.remove('saved');
+  btn.textContent = wasAlreadySaved ? 'Re-saving…' : 'Saving…';
 
   try {
     const res = await fetch('/api/save', {
@@ -187,15 +385,18 @@ async function handleSave(e) {
       body: JSON.stringify({ uri }),
     });
     if (!res.ok) throw new Error(await res.text());
-    savedUris.add(uri);
-    persistSaved();
     btn.classList.remove('saving');
     btn.classList.add('saved');
     btn.textContent = 'Saved ✓';
-    showToast('Saved to Blocks!');
+    showToast(wasAlreadySaved ? 'Re-saved to Blocks!' : 'Saved to Blocks!');
+    // Update local state
+    const post = posts.get(uri);
+    if (post) post.saved_to_blocks = true;
+    refreshTimeline();
   } catch (err) {
     btn.classList.remove('saving');
-    btn.textContent = 'Save to Blocks';
+    if (wasAlreadySaved) btn.classList.add('saved');
+    btn.textContent = wasAlreadySaved ? 'Saved ✓' : 'Save to Blocks';
     showToast('Save failed: ' + err.message, true);
   }
 }
@@ -221,40 +422,58 @@ function connect() {
   };
 
   es.onmessage = (e) => {
-    let post;
-    try { post = JSON.parse(e.data); } catch { return; }
-    const uri = post.uri;
+    let event;
+    try { event = JSON.parse(e.data); } catch { return; }
+
+    // Saved notification from the server
+    if (event.event === 'saved') {
+      const post = posts.get(event.uri);
+      if (post) {
+        post.saved_to_blocks = true;
+        updateCardSaved(event.uri);
+      }
+      return;
+    }
+
+    // New or updated post
+    const uri = event.uri;
+    if (!uri) return;
+    // Remove the internal event field before storing
+    const { event: _, ...post } = event;
 
     if (posts.has(uri)) {
-      posts.set(uri, { ...posts.get(uri), ...post });
-      updateCardCounts(post);
+      const existing = posts.get(uri);
+      const updatedPost = { ...existing, ...post };
+      posts.set(uri, updatedPost);
+      updateCardCounts(updatedPost);
+      if (post.saved_to_blocks && !existing.saved_to_blocks) {
+        updateCardSaved(uri);
+      }
     } else {
       posts.set(uri, post);
       const card = renderCard(post);
-      // Insert at top (after any newer posts already there)
-      const firstCard = feedEl.firstElementChild;
-      if (firstCard) {
-        // Insert before cards with older timestamps
-        let inserted = false;
-        for (const existing of feedEl.children) {
-          const existUri = existing.dataset.uri;
-          const existPost = posts.get(existUri);
-          if (existPost && new Date(existPost.indexed_at) < new Date(post.indexed_at)) {
-            feedEl.insertBefore(card, existing);
-            inserted = true;
-            break;
-          }
+      // Insert in chronological order (newest last = bottom of feed)
+      let inserted = false;
+      const allCards = [...feedEl.children];
+      for (const existing of allCards) {
+        const existPost = posts.get(existing.dataset.uri);
+        if (existPost && new Date(existPost.indexed_at) > new Date(post.indexed_at)) {
+          feedEl.insertBefore(card, existing);
+          inserted = true;
+          break;
         }
-        if (!inserted) feedEl.appendChild(card);
-      } else {
-        feedEl.appendChild(card);
       }
+      if (!inserted) feedEl.appendChild(card);
       updateCount();
     }
   };
 }
 
 connect();
+
+// ── Initial timeline load ─────────────────────────────────────────────────
+refreshTimeline();
+setInterval(refreshTimeline, 3 * 60 * 1000); // refresh every 3 min
 
 // Refresh relative timestamps every minute
 setInterval(() => {

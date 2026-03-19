@@ -12,6 +12,7 @@
       <div class="header-left">
         <span class="logo">mgflow</span>
         <span class="tag">#monkigras</span>
+        <span class="version">v{{ APP_VERSION }}</span>
       </div>
       <div class="header-right">
         <span class="status-dot" id="statusDot" title="Connecting…"></span>
@@ -19,6 +20,11 @@
       </div>
     </div>
   </header>
+
+  <div class="timeline-strip" id="timelineStrip">
+    <canvas id="timelineCanvas"></canvas>
+    <div class="timeline-tooltip" id="timelineTooltip"></div>
+  </div>
 
   <main class="feed-container">
     <div id="feed"></div>

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from ..database import AsyncSessionLocal
 from ..models import Post
 from ..schemas import SaveToBlocksRequest
+from ..poller import notify_saved
 
 router = APIRouter(prefix="/api/save", tags=["save"])
 logger = logging.getLogger(__name__)
@@ -115,5 +116,14 @@ async def save_to_blocks(req: SaveToBlocksRequest):
                     await _upload_image(client, block_id, image_url, alt)
             except (json.JSONDecodeError, KeyError):
                 pass
+
+    # Mark saved in DB and notify SSE subscribers
+    async with AsyncSessionLocal() as db:
+        post = await db.get(Post, req.uri)
+        if post:
+            post.saved_to_blocks = True
+            post.saved_to_blocks_at = datetime.now(timezone.utc)
+            await db.commit()
+    notify_saved(req.uri)
 
     return {"ok": True, "page_id": page_id, "block_id": block_id}

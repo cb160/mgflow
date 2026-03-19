@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -10,9 +10,12 @@ from ..database import get_db, AsyncSessionLocal
 from ..models import Post
 from ..schemas import PostResponse
 from ..poller import add_subscriber, remove_subscriber
+from ..bluesky import CONFERENCE_START
 
 router = APIRouter(prefix="/api/feed", tags=["feed"])
 logger = logging.getLogger(__name__)
+
+BUCKET_MINUTES = 15
 
 
 def _post_to_dict(p: Post) -> dict:
@@ -27,12 +30,13 @@ def _post_to_dict(p: Post) -> dict:
         "reply_count": p.reply_count,
         "repost_count": p.repost_count,
         "indexed_at": p.indexed_at.isoformat(),
+        "saved_to_blocks": p.saved_to_blocks or False,
     }
 
 
 @router.get("", response_model=list[PostResponse])
 async def get_feed(
-    limit: int = Query(200, le=500),
+    limit: int = Query(500, le=1000),
     before: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -47,26 +51,53 @@ async def get_feed(
     return result.scalars().all()
 
 
+@router.get("/timeline")
+async def get_timeline(db: AsyncSession = Depends(get_db)):
+    stmt = select(Post).where(Post.indexed_at >= CONFERENCE_START).order_by(Post.indexed_at)
+    result = await db.execute(stmt)
+    posts = result.scalars().all()
+
+    buckets: dict[str, dict] = {}
+    for p in posts:
+        dt = p.indexed_at
+        minute_bucket = (dt.minute // BUCKET_MINUTES) * BUCKET_MINUTES
+        key = dt.replace(minute=minute_bucket, second=0, microsecond=0).isoformat()
+        if key not in buckets:
+            buckets[key] = {"start": key, "count": 0, "saved_count": 0}
+        buckets[key]["count"] += 1
+        if p.saved_to_blocks:
+            buckets[key]["saved_count"] += 1
+
+    return {
+        "buckets": sorted(buckets.values(), key=lambda x: x["start"]),
+        "conference_start": CONFERENCE_START.replace(tzinfo=None).isoformat(),
+        "total": len(posts),
+        "saved_total": sum(1 for p in posts if p.saved_to_blocks),
+    }
+
+
 @router.get("/stream")
 async def feed_stream():
     async def event_generator():
-        # Send initial batch of last 50 posts
+        # Send initial batch — all posts since conference start, oldest first
         async with AsyncSessionLocal() as db:
-            stmt = select(Post).order_by(Post.indexed_at.desc()).limit(50)
+            stmt = select(Post).where(
+                Post.indexed_at >= CONFERENCE_START
+            ).order_by(Post.indexed_at.asc())
             result = await db.execute(stmt)
-            initial = list(reversed(result.scalars().all()))
+            initial = result.scalars().all()
 
         for p in initial:
             yield f"data: {json.dumps(_post_to_dict(p))}\n\n"
 
-        q: asyncio.Queue = asyncio.Queue(maxsize=200)
+        q: asyncio.Queue = asyncio.Queue(maxsize=500)
         add_subscriber(q)
         keepalive_interval = 30
         try:
             while True:
                 try:
-                    post_data = await asyncio.wait_for(q.get(), timeout=keepalive_interval)
-                    yield f"data: {json.dumps(post_data, default=str)}\n\n"
+                    event = await asyncio.wait_for(q.get(), timeout=keepalive_interval)
+                    yield f"data: {json.dumps(event, default=str)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
         except asyncio.CancelledError:

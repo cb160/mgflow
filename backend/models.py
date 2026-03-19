@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import String, Text, Integer, DateTime
+from typing import Optional
+from sqlalchemy import String, Text, Integer, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
 
@@ -18,3 +19,5 @@ class Post(Base):
     repost_count: Mapped[int] = mapped_column(Integer, default=0)
     indexed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     saved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    saved_to_blocks: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    saved_to_blocks_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

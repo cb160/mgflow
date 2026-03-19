@@ -1,8 +1,11 @@
+import asyncio
 import json
 import os
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+
+CONFERENCE_START = datetime(2026, 3, 19, 0, 0, 0, tzinfo=timezone.utc)
 
 SEARCH_URL = "https://bsky.social/xrpc/app.bsky.feed.searchPosts"
 SESSION_URL = "https://bsky.social/xrpc/com.atproto.server.createSession"
@@ -156,3 +159,45 @@ async def fetch_posts(cursor: str | None = None) -> tuple[list[dict], str | None
             posts.append(parsed)
 
     return posts, data.get("cursor")
+
+
+async def fetch_all_since(since_dt: datetime) -> list[dict]:
+    """Paginate through all #monkigras posts back to since_dt."""
+    import logging
+    logger = logging.getLogger(__name__)
+    all_posts: list[dict] = []
+    cursor: str | None = None
+    since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    page = 0
+
+    while True:
+        try:
+            posts, cursor = await fetch_posts(cursor=cursor)
+        except Exception as exc:
+            logger.warning("fetch_all_since error on page %d: %s", page, exc)
+            break
+
+        if not posts:
+            break
+
+        stop = False
+        for p in posts:
+            # Normalise both to naive UTC for comparison
+            post_dt = p["indexed_at"].replace(tzinfo=None) if p["indexed_at"].tzinfo else p["indexed_at"]
+            since_naive = since_dt.replace(tzinfo=None)
+            if post_dt < since_naive:
+                stop = True
+                break
+            all_posts.append(p)
+
+        if stop:
+            break
+
+        page += 1
+        logger.info("fetch_all_since page %d: %d posts total so far", page, len(all_posts))
+
+        if not cursor:
+            break
+        await asyncio.sleep(0.5)  # be polite to the API
+
+    return all_posts

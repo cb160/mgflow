@@ -20,3 +20,17 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _migrate()
+
+
+async def _migrate():
+    migrations = [
+        "ALTER TABLE posts ADD COLUMN saved_to_blocks INTEGER DEFAULT 0",
+        "ALTER TABLE posts ADD COLUMN saved_to_blocks_at DATETIME",
+    ]
+    async with engine.begin() as conn:
+        for sql in migrations:
+            try:
+                await conn.execute(__import__("sqlalchemy").text(sql))
+            except Exception:
+                pass  # column already exists

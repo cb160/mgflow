@@ -14,6 +14,7 @@ class PostResponse(BaseModel):
     reply_count: int
     repost_count: int
     indexed_at: datetime
+    saved_to_blocks: bool = False
 
     model_config = {"from_attributes": True}
 
