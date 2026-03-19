@@ -218,6 +218,28 @@ body {
   color: var(--muted);
 }
 
+.quote-author {
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.quote-text {
+  margin-bottom: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.embed-quote .embed-images {
+  margin-top: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.embed-quote .embed-images img {
+  max-height: 200px;
+}
+
 /* ── Footer ── */
 .post-footer {
   display: flex;

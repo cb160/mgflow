@@ -51,6 +51,8 @@ async def poll_once():
                 existing.like_count = p["like_count"]
                 existing.reply_count = p["reply_count"]
                 existing.repost_count = p["repost_count"]
+                if existing.embeds_json is None and p.get("embeds_json"):
+                    existing.embeds_json = p["embeds_json"]
                 updated_count += 1
         await db.commit()
 

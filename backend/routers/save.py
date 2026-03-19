@@ -57,6 +57,22 @@ async def _create_block(client: httpx.AsyncClient, page_id: str, content: str) -
     return resp.json()["id"]
 
 
+def _extract_images(embed: dict) -> list[tuple[str, str]]:
+    """Return (url, alt) pairs for all images in an embed, including nested ones."""
+    if not embed:
+        return []
+    t = embed.get("type", "")
+    if t == "images":
+        return [(img["fullsize"] or img["thumb"], img.get("alt", ""))
+                for img in embed.get("images", [])
+                if img.get("fullsize") or img.get("thumb")]
+    if t == "recordWithMedia":
+        return _extract_images(embed.get("media") or {})
+    if t == "quote":
+        return _extract_images(embed.get("nested_embed") or {})
+    return []
+
+
 async def _upload_image(client: httpx.AsyncClient, block_id: str, image_url: str, alt: str):
     try:
         img_resp = await client.get(image_url, timeout=15)
@@ -94,11 +110,8 @@ async def save_to_blocks(req: SaveToBlocksRequest):
         if post.embeds_json:
             try:
                 embed = json.loads(post.embeds_json)
-                if embed.get("type") == "images":
-                    for img in embed.get("images", []):
-                        image_url = img.get("fullsize") or img.get("thumb")
-                        if image_url:
-                            await _upload_image(client, block_id, image_url, img.get("alt", ""))
+                for image_url, alt in _extract_images(embed):
+                    await _upload_image(client, block_id, image_url, alt)
             except (json.JSONDecodeError, KeyError):
                 pass
 

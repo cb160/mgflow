@@ -45,18 +45,43 @@ function persistSaved() {
 
 // ── Embed rendering ───────────────────────────────────────────────────────
 
+function renderQuote(q, nestedEmbed) {
+  if (!q) return '';
+  const name = q.author_display_name || q.author_handle || '';
+  const nestedHtml = nestedEmbed ? renderEmbedObj(nestedEmbed) : '';
+  return `<div class="embed-quote">
+    <div class="quote-author">@${escHtml(q.author_handle || '')}</div>
+    <div class="quote-text">${escHtml(q.text || '')}</div>
+    ${nestedHtml}
+  </div>`;
+}
+
+function renderEmbedObj(embed) {
+  if (!embed) return '';
+  if (embed.type === 'images') {
+    const cls = embed.images.length >= 2 ? 'embed-images two-up' : 'embed-images';
+    return `<div class="${cls}">${embed.images.map(img => {
+      const src = buildCdnUrl(img);
+      return src ? `<img src="${escHtml(src)}" alt="${escHtml(img.alt || '')}" loading="lazy">` : '';
+    }).join('')}</div>`;
+  }
+  if (embed.type === 'external' && embed.uri) {
+    return `<a class="embed-link" href="${escHtml(embed.uri)}" target="_blank" rel="noopener noreferrer">
+      <div class="embed-link-body">
+        <div class="embed-link-title">${escHtml(embed.title || embed.uri)}</div>
+      </div>
+    </a>`;
+  }
+  return '';
+}
+
 function renderEmbed(embedJson) {
   if (!embedJson) return '';
   let embed;
   try { embed = JSON.parse(embedJson); } catch { return ''; }
 
   if (embed.type === 'images') {
-    const cls = embed.images.length >= 2 ? 'embed-images two-up' : 'embed-images';
-    const imgs = embed.images.map(img => {
-      const src = img.thumb ? buildCdnUrl(img) : '';
-      return src ? `<img src="${escHtml(src)}" alt="${escHtml(img.alt || '')}" loading="lazy">` : '';
-    }).join('');
-    return `<div class="${cls}">${imgs}</div>`;
+    return renderEmbedObj(embed);
   }
 
   if (embed.type === 'external' && embed.uri) {
@@ -73,8 +98,12 @@ function renderEmbed(embedJson) {
     </a>`;
   }
 
+  if (embed.type === 'recordWithMedia') {
+    return renderEmbed(embed.media) + renderQuote(embed.quote, null);
+  }
+
   if (embed.type === 'quote') {
-    return `<div class="embed-quote">💬 @${escHtml(embed.author_handle || '')}: ${escHtml(embed.text || '')}</div>`;
+    return renderQuote(embed, embed.nested_embed);
   }
 
   return '';

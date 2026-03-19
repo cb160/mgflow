@@ -60,13 +60,35 @@ def _parse_embed(embed: dict | None) -> dict | None:
             "description": ext.get("description"),
             "thumb": thumb,
         }
-    if "record" in t and "embed" not in t:
+    if "recordWithMedia" in t:
+        media = _parse_embed(embed.get("media"))
+        rec = embed.get("record", {}).get("record", {})
+        return {
+            "type": "recordWithMedia",
+            "media": media,
+            "quote": {
+                "uri": rec.get("uri"),
+                "author_handle": rec.get("author", {}).get("handle"),
+                "author_display_name": rec.get("author", {}).get("displayName"),
+                "text": rec.get("value", {}).get("text", ""),
+            },
+        }
+    if "record" in t:
         rec = embed.get("record", {})
+        # Extract any images nested inside the quoted post's embeds[]
+        nested_embed = None
+        for ne in rec.get("embeds", []):
+            parsed = _parse_embed(ne)
+            if parsed and parsed.get("type") in ("images", "external"):
+                nested_embed = parsed
+                break
         return {
             "type": "quote",
             "uri": rec.get("uri"),
             "author_handle": rec.get("author", {}).get("handle"),
+            "author_display_name": rec.get("author", {}).get("displayName"),
             "text": rec.get("value", {}).get("text", ""),
+            "nested_embed": nested_embed,
         }
     return {"type": "unknown", "raw": t}
 
