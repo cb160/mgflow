@@ -2,6 +2,32 @@
 
 const posts = new Map(); // uri → post data (source of truth)
 
+// ── Day filter state ───────────────────────────────────────────────────────
+const DAY1_START = new Date('2026-03-19T00:00:00Z');
+const DAY2_START = new Date('2026-03-20T00:00:00Z');
+const DAY3_START = new Date('2026-03-21T00:00:00Z');
+let activeDayFilter = null; // null = all, 'day1', 'day2'
+
+function postMatchesFilter(post) {
+  if (!activeDayFilter) return true;
+  const dt = new Date(post.indexed_at);
+  if (activeDayFilter === 'day1') return dt >= DAY1_START && dt < DAY2_START;
+  if (activeDayFilter === 'day2') return dt >= DAY2_START && dt < DAY3_START;
+  return true;
+}
+
+function getFilteredBuckets() {
+  if (!timelineData) return [];
+  const { buckets } = timelineData;
+  if (!activeDayFilter) return buckets;
+  return buckets.filter(b => {
+    const bt = new Date(b.start);
+    if (activeDayFilter === 'day1') return bt >= DAY1_START && bt < DAY2_START;
+    if (activeDayFilter === 'day2') return bt >= DAY2_START && bt < DAY3_START;
+    return true;
+  });
+}
+
 const feedEl = document.getElementById('feed');
 const countEl = document.getElementById('postCount');
 const dotEl = document.getElementById('statusDot');
@@ -43,8 +69,19 @@ function showToast(msg, isError = false) {
 }
 
 function updateCount() {
-  const n = posts.size;
+  const n = activeDayFilter
+    ? [...posts.values()].filter(postMatchesFilter).length
+    : posts.size;
   countEl.textContent = `${n} post${n !== 1 ? 's' : ''}`;
+}
+
+function rebuildFeed() {
+  feedEl.innerHTML = '';
+  const sorted = [...posts.values()]
+    .filter(postMatchesFilter)
+    .sort((a, b) => new Date(b.indexed_at) - new Date(a.indexed_at));
+  for (const post of sorted) feedEl.appendChild(renderCard(post));
+  updateCount();
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────
@@ -61,7 +98,8 @@ async function refreshTimeline() {
 }
 
 function drawTimeline() {
-  if (!timelineData || !timelineData.buckets.length) return;
+  const buckets = getFilteredBuckets();
+  if (!buckets.length) return;
 
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.parentElement.getBoundingClientRect();
@@ -75,7 +113,6 @@ function drawTimeline() {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  const { buckets } = timelineData;
   const LABEL_W = 30; // left space for HH:MM labels
   const BAR_AREA = W - LABEL_W - 2;
   const BUCKET_MS = 15 * 60 * 1000;
@@ -88,7 +125,7 @@ function drawTimeline() {
   const maxCount = Math.max(...buckets.map(b => b.count), 1);
 
   function timeToY(t) {
-    return ((t - firstBucket) / timeSpan) * H;
+    return H - ((t - firstBucket) / timeSpan) * H;
   }
 
   // Background
@@ -145,17 +182,17 @@ function drawTimeline() {
 }
 
 function timelineHover(e) {
-  if (!timelineData || !timelineData.buckets.length) return;
+  const buckets = getFilteredBuckets();
+  if (!buckets.length) return;
   const rect = canvas.getBoundingClientRect();
   const y = e.clientY - rect.top;
   const H = rect.height;
-  const { buckets } = timelineData;
 
   const firstBucket = new Date(buckets[0].start);
   const lastBucket = new Date(buckets[buckets.length - 1].start);
   const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
 
-  const t = firstBucket.getTime() + (y / H) * timeSpan;
+  const t = firstBucket.getTime() + ((H - y) / H) * timeSpan;
   const BUCKET_MS = 15 * 60 * 1000;
   const bucket = buckets.find(b => {
     const bs = new Date(b.start).getTime();
@@ -174,17 +211,17 @@ function timelineHover(e) {
 }
 
 function timelineClick(e) {
-  if (!timelineData || !timelineData.buckets.length) return;
+  const buckets = getFilteredBuckets();
+  if (!buckets.length) return;
   const rect = canvas.getBoundingClientRect();
   const y = e.clientY - rect.top;
   const H = rect.height;
-  const { buckets } = timelineData;
 
   const firstBucket = new Date(buckets[0].start);
   const lastBucket = new Date(buckets[buckets.length - 1].start);
   const timeSpan = lastBucket - firstBucket + 15 * 60 * 1000;
 
-  const t = firstBucket.getTime() + (y / H) * timeSpan;
+  const t = firstBucket.getTime() + ((H - y) / H) * timeSpan;
   const BUCKET_MS = 15 * 60 * 1000;
   const bucket = buckets.find(b => {
     const bs = new Date(b.start).getTime();
@@ -436,18 +473,20 @@ function connect() {
       }
     } else {
       posts.set(uri, post);
-      const card = renderCard(post);
-      // Initial batch arrives newest-first → append keeps the order.
-      // Live posts arrive as they're polled (newest) → prepend to top.
-      // We distinguish: if the new post is newer than the current top card, prepend.
-      const firstCard = feedEl.firstElementChild;
-      const firstPost = firstCard ? posts.get(firstCard.dataset.uri) : null;
-      if (firstPost && new Date(post.indexed_at) > new Date(firstPost.indexed_at)) {
-        feedEl.prepend(card);
-      } else {
-        feedEl.appendChild(card);
+      if (postMatchesFilter(post)) {
+        const card = renderCard(post);
+        // Initial batch arrives newest-first → append keeps the order.
+        // Live posts arrive as they're polled (newest) → prepend to top.
+        // We distinguish: if the new post is newer than the current top card, prepend.
+        const firstCard = feedEl.firstElementChild;
+        const firstPost = firstCard ? posts.get(firstCard.dataset.uri) : null;
+        if (firstPost && new Date(post.indexed_at) > new Date(firstPost.indexed_at)) {
+          feedEl.prepend(card);
+        } else {
+          feedEl.appendChild(card);
+        }
+        updateCount();
       }
-      updateCount();
     }
   };
 }
@@ -467,25 +506,31 @@ setInterval(() => {
 
 // ── Stream management ─────────────────────────────────────────────────────
 
-const STREAMS_KEY = 'mgflow_streams';
-const ACTIVE_STREAM_KEY = 'mgflow_active_stream';
 const DEFAULT_STREAMS = [{ id: 'jdI7MZfMEFc', name: 'Monkigras Main Stream' }];
-
-function loadStreams() {
-  try { return JSON.parse(localStorage.getItem(STREAMS_KEY)) || DEFAULT_STREAMS; }
-  catch { return DEFAULT_STREAMS; }
-}
-
-function saveStreams(streams) {
-  localStorage.setItem(STREAMS_KEY, JSON.stringify(streams));
-}
+let _streamsConfig = { streams: DEFAULT_STREAMS, active_stream: DEFAULT_STREAMS[0].id };
 
 function getActiveStreamId() {
-  return localStorage.getItem(ACTIVE_STREAM_KEY) || loadStreams()[0]?.id || '';
+  return _streamsConfig.active_stream || _streamsConfig.streams[0]?.id || '';
 }
 
-function setActiveStreamId(id) {
-  localStorage.setItem(ACTIVE_STREAM_KEY, id);
+async function _fetchStreamsConfig() {
+  try {
+    const r = await fetch('/api/config/streams');
+    if (r.ok) {
+      const data = await r.json();
+      if (data.streams?.length) _streamsConfig = data;
+    }
+  } catch {}
+}
+
+async function _saveStreamsConfig() {
+  try {
+    await fetch('/api/config/streams', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_streamsConfig),
+    });
+  } catch {}
 }
 
 function extractVideoId(input) {
@@ -509,19 +554,15 @@ const streamNameInput = document.getElementById('streamNameInput');
 const streamUrlInput = document.getElementById('streamUrlInput');
 
 function renderStreamSelect() {
-  const streams = loadStreams();
-  const active = getActiveStreamId();
-  streamSelectEl.innerHTML = streams.map(s =>
-    `<option value="${escHtml(s.id)}"${s.id === active ? ' selected' : ''}>${escHtml(s.name)}</option>`
+  streamSelectEl.innerHTML = _streamsConfig.streams.map(s =>
+    `<option value="${escHtml(s.id)}"${s.id === _streamsConfig.active_stream ? ' selected' : ''}>${escHtml(s.name)}</option>`
   ).join('');
 }
 
-renderStreamSelect();
-
 streamSelectEl.addEventListener('change', () => {
-  const id = streamSelectEl.value;
-  setActiveStreamId(id);
-  if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(id);
+  _streamsConfig.active_stream = streamSelectEl.value;
+  _saveStreamsConfig();
+  if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(_streamsConfig.active_stream);
 });
 
 document.getElementById('streamAddBtn').addEventListener('click', () => {
@@ -535,16 +576,15 @@ document.getElementById('streamCancelBtn').addEventListener('click', () => {
   streamUrlInput.value = '';
 });
 
-document.getElementById('streamSaveBtn').addEventListener('click', () => {
+document.getElementById('streamSaveBtn').addEventListener('click', async () => {
   const name = streamNameInput.value.trim();
   const id = extractVideoId(streamUrlInput.value);
   if (!name) { showToast('Enter a stream name', true); return; }
   if (!id) { showToast('Invalid YouTube URL or video ID', true); return; }
-  const streams = loadStreams();
-  if (streams.find(s => s.id === id)) { showToast('Stream already added', true); return; }
-  streams.push({ id, name });
-  saveStreams(streams);
-  setActiveStreamId(id);
+  if (_streamsConfig.streams.find(s => s.id === id)) { showToast('Stream already added', true); return; }
+  _streamsConfig.streams.push({ id, name });
+  _streamsConfig.active_stream = id;
+  await _saveStreamsConfig();
   renderStreamSelect();
   streamAddForm.classList.remove('visible');
   streamNameInput.value = '';
@@ -553,28 +593,38 @@ document.getElementById('streamSaveBtn').addEventListener('click', () => {
   showToast(`Added: ${name}`);
 });
 
-document.getElementById('streamRemoveBtn').addEventListener('click', () => {
-  const streams = loadStreams();
-  if (streams.length <= 1) { showToast('Cannot remove the last stream', true); return; }
-  const active = getActiveStreamId();
-  const updated = streams.filter(s => s.id !== active);
-  saveStreams(updated);
-  setActiveStreamId(updated[0].id);
+document.getElementById('streamRemoveBtn').addEventListener('click', async () => {
+  if (_streamsConfig.streams.length <= 1) { showToast('Cannot remove the last stream', true); return; }
+  const active = _streamsConfig.active_stream;
+  _streamsConfig.streams = _streamsConfig.streams.filter(s => s.id !== active);
+  _streamsConfig.active_stream = _streamsConfig.streams[0].id;
+  await _saveStreamsConfig();
   renderStreamSelect();
-  if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(updated[0].id);
+  if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(_streamsConfig.active_stream);
 });
 
 // ── YouTube player ────────────────────────────────────────────────────────
 
 let ytPlayer = null;
+let _ytReadyResolve;
+const _ytReady = new Promise(r => { _ytReadyResolve = r; });
 
-window.onYouTubeIframeAPIReady = function () {
+window.onYouTubeIframeAPIReady = async function () {
+  await _ytReady;
   ytPlayer = new YT.Player('ytPlayer', {
     videoId: getActiveStreamId(),
     playerVars: { autoplay: 0, rel: 0, modestbranding: 1 },
     events: { onReady: () => {} }
   });
 };
+
+async function initStreams() {
+  await _fetchStreamsConfig();
+  renderStreamSelect();
+  _ytReadyResolve();
+}
+
+initStreams();
 
 // ── Video panel toggle ────────────────────────────────────────────────────
 
@@ -677,4 +727,15 @@ clipBtn.addEventListener('click', async () => {
     clipBtn.textContent = '📎 Clip to Blocks';
     showToast('Clip failed: ' + err.message, true);
   }
+});
+
+// ── Day filter ─────────────────────────────────────────────────────────────
+
+document.getElementById('dayFilter').addEventListener('click', (e) => {
+  const btn = e.target.closest('.day-btn');
+  if (!btn) return;
+  activeDayFilter = btn.dataset.day || null;
+  document.querySelectorAll('.day-btn').forEach(b => b.classList.toggle('active', b === btn));
+  rebuildFeed();
+  drawTimeline();
 });

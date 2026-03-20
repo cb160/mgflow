@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from .database import init_db
-from .routers import feed, save, clip
+from .routers import feed, save, clip, config
 from . import poller as _poller
 
 app = FastAPI(title="mgflow")
@@ -23,6 +23,7 @@ async def startup():
 app.include_router(feed.router)
 app.include_router(save.router)
 app.include_router(clip.router)
+app.include_router(config.router)
 
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 

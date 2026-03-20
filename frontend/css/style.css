@@ -322,9 +322,36 @@ body {
   flex: 1;
   min-width: 0;
   max-width: 720px;
-  padding-top: 12px;
+  padding-top: 0;
   padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
 }
+
+/* ── Day filter ── */
+.day-filter {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  position: sticky;
+  top: var(--header-h);
+  background: rgba(13, 17, 23, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+
+.day-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--muted);
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.day-btn:hover { border-color: var(--accent); color: var(--text); }
+.day-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* ── Mobile: video panel hidden by default, toggle shows it ── */
 @media (max-width: 900px) {
